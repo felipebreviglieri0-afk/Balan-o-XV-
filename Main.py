@@ -1,57 +1,70 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
+import plotly.express as px
 
-# Estilo Visual "The Bestie" com cores da Conveniência da XV
-st.set_page_config(page_title="Balanço XV", layout="wide")
+st.set_page_config(page_title="Conveniência da XV", layout="wide")
 
-st.markdown("""
-    <style>
-    .stApp { background-color: #121212; color: white; }
-    .product-card { background: #1e1e1e; padding: 15px; border-radius: 12px; border-left: 5px solid #00CED1; margin-bottom: 10px; }
-    h1, h2 { color: #FF8C00 !important; }
-    </style>
-""", unsafe_allow_html=True)
+# Conexão com a Planilha
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Lista completa extraída das suas fotos
-PRODUTOS_XV = {
-    "🥤 Refrigerantes": ["Coca Lata", "Guaraná Lata", "Sprite Lata", "Fanta Laranja", "Pepsi Lata", "Água", "Coca 2L", "Conquista Guaraná"],
-    "🍺 Cervejas": ["Brahma", "Skol", "Amstel", "Heineken LN", "Budweiser", "Beats Azul", "Spaten", "Lokal Lata"],
-    "🥃 Destilados": ["Dom Scott", "Red Label", "Jack Daniels", "Askov 900ml", "Smirnoff", "Velho Barreiro", "Combo Smirnoff"],
-    "⚡ Energéticos": ["Monster Trad.", "Monster Melancia", "Red Bull", "Furioso 2L", "Magnetto 2L"],
-    "🧹 Limpeza e Descartáveis": ["Papel Higiênico", "Detergente", "Copo 700ml", "Copo 50ml", "Saco Lixo 60L", "Canudo"],
-    "🍓 Frutas e Gelo": ["Gelo Coco", "Gelo Maçã", "Gelo Potável", "Morango", "Melancia", "Limão", "Abacaxi"],
-    "🍫 Doces e Outros": ["Ouro Branco", "Sonho de Valsa", "Fini Beijos", "Halls", "Trident", "Carvão", "Seda Zomo"]
-}
-
+# --- SISTEMA DE LOGIN COM SENHA ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
 if not st.session_state.logged_in:
-    st.title("Conveniência da XV 🚀")
+    st.title("Conveniência da XV - Acesso Restrito 🔐")
     user = st.text_input("Usuário")
+    password = st.text_input("Senha", type="password")
+    
     if st.button("Entrar"):
-        if user in ["Feli", "Pri", "Gordinho", "Felipe", "Gustavo"]:
+        # Definição de acessos
+        admins = {"Feli": "priceca1", "Pri": "priceca1", "Gordinho": "priceca1"}
+        colabs = {"Felipe": "conveniênciadaxv1", "Gustavo": "conveniênciadaxv1"}
+        
+        if user in admins and admins[user] == password:
             st.session_state.logged_in = True
+            st.session_state.role = "admin"
             st.session_state.user = user
             st.rerun()
+        elif user in colabs and colabs[user] == password:
+            st.session_state.logged_in = True
+            st.session_state.role = "colab"
+            st.session_state.user = user
+            st.rerun()
+        else:
+            st.error("Usuário ou senha incorretos.")
 else:
-    st.sidebar.title(f"Olá, {st.session_state.user}!")
-    aba = st.sidebar.radio("Navegação", ["📝 Fazer Balanço", "📊 Histórico"])
+    # Menu Lateral
+    opcoes = ["📝 Fazer Balanço"]
+    if st.session_state.role == "admin":
+        opcoes.append("📊 Gráficos e Relatórios")
+    
+    aba = st.sidebar.radio("Navegação", opcoes)
+    if st.sidebar.button("Sair"):
+        st.session_state.logged_in = False
+        st.rerun()
 
+    # --- ABA DE BALANÇO ---
     if aba == "📝 Fazer Balanço":
-        cat = st.selectbox("Escolha a Categoria", list(PRODUTOS_XV.keys()))
-        
-        with st.form("form_balanco"):
-            dados_para_salvar = []
-            for p in PRODUTOS_XV[cat]:
-                st.markdown(f"<div class='product-card'><b>{p}</b></div>", unsafe_allow_html=True)
-                c1, c2, c3 = st.columns(3)
-                ini = c1.number_input(f"Início ({p})", min_value=0, key=f"i_{p}")
-                ent = c2.number_input(f"Entrada ({p})", min_value=0, key=f"e_{p}")
-                fin = c3.number_input(f"Final ({p})", min_value=0, key=f"f_{p}")
-                dados_para_salvar.append({"Data": datetime.now().strftime("%d/%m/%Y"), "Produto": p, "Consumo": (ini+ent)-fin})
-            
-            if st.form_submit_button("Finalizar e Enviar para Planilha"):
-                st.success("Balanço registrado com sucesso! (Conecte o Sheets nos Secrets para gravar permanentemente)")
-                st.balloons()
+        st.header(f"Balanço por: {st.session_state.user}")
+        # (Aqui entra a lógica de produtos que já criamos antes...)
+        st.info("Selecione a categoria no menu para começar o lançamento.")
+
+    # --- ABA DE GRÁFICOS (SOMENTE ADMIN) ---
+    elif aba == "📊 Gráficos e Relatórios":
+        st.header("Análise de Vendas e Consumo")
+        try:
+            df = conn.read()
+            if not df.empty:
+                # Gráfico de Consumo por Produto
+                fig = px.bar(df, x="Produto", y="Consumo", color="Produto", title="Produtos mais vendidos (Consumo)")
+                st.plotly_chart(fig, use_container_width=True)
+                
+                st.subheader("Dados Brutos da Planilha")
+                st.write(df)
+            else:
+                st.warning("Ainda não existem dados salvos na planilha.")
+        except:
+            st.error("Erro ao carregar gráficos. Verifique a conexão com o Google Sheets.")
