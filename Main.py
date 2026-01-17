@@ -1,4 +1,4 @@
-        import streamlit as st
+import streamlit as st
 
 # Estilo Visual "The Bestie"
 st.set_page_config(page_title="Conveniência da XV", layout="wide")
@@ -86,4 +86,5 @@ else:
 
     elif menu == "📊 Relatórios":
         st.title("Em breve: Gráficos automáticos!")
+
 
